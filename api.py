@@ -1,10 +1,28 @@
 # api.py
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from mvp_core import load_data, compute_final_taste, nearest_foods, compare_sentence, TASTE_AXES
 import numpy as np
+from datetime import datetime
 
 app = FastAPI()
 foods, deltas = load_data()
+
+@app.get("/health")
+def health():
+    """
+    서버 헬스 체크용 엔드포인트.
+    - 상태: ok
+    - 로드된 데이터 개수
+    - 맛 축(axes)
+    - 서버 시간
+    """
+    return {
+        "status": "ok",
+        "foods_count": int(foods.shape[0]),
+        "ingredients_count": int(deltas["ingredient"].nunique()),
+        "axes": TASTE_AXES,
+        "server_time": datetime.now().isoformat(timespec="seconds")
+    }
 
 @app.post("/predict")
 def predict(body: dict):
