@@ -3,7 +3,7 @@ from fastapi import FastAPI, Query
 from mvp_core import load_data, compute_final_taste, nearest_foods, compare_sentence, TASTE_AXES
 import numpy as np
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 app = FastAPI()
 foods, deltas = load_data()
@@ -63,6 +63,34 @@ def list_foods(
     return {
         "count": len(items),
         "items": items
+    }
+
+@app.get("/ingredients")
+def list_ingredients(
+    search: Optional[str] = Query(None, description="부분 문자열 매칭(대소문자 무시)"),
+    limit: int = Query(100, ge=1, le=500, description="반환 최대 개수"),
+    sort: str = Query("asc", pattern="^(asc|desc)$", description="정렬 순서: asc | desc")
+):
+    """
+    지원 재료 목록 조회
+    - 예) /ingredients
+    - 예) /ingredients?search=장
+    - 예) /ingredients?limit=50&sort=desc
+    """
+    if "ingredient" not in deltas.columns:
+        return {"count": 0, "items": []}
+
+    names: List[str] = sorted(deltas["ingredient"].dropna().astype(str).unique().tolist(), key=str.lower)
+    if sort == "desc":
+        names = list(reversed(names))
+    if search:
+        s = search.lower()
+        names = [n for n in names if s in n.lower()]
+    names = names[:limit]
+
+    return {
+        "count": len(names),
+        "items": [{"ingredient": n} for n in names]
     }
 
 @app.post("/predict")
