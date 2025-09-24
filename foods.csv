@@ -1,0 +1,4 @@
+﻿food_id,name,sweet,salty,sour,bitter,umami,spicy,fatty,category
+1,곰탕,1.0,3.0,0.5,0.5,4.0,0.0,1.5,soup
+2,된장국,0.5,3.0,0.5,0.8,3.5,0.0,0.5,soup
+3,신라면,1.0,2.0,1.0,0.5,2.5,7.0,1.0,noodle

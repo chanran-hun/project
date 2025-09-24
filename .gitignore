@@ -1,0 +1,15 @@
+# 파이썬 캐시/임시 파일
+__pycache__/
+*.pyc
+
+# 가상환경
+venv/
+.env/
+
+# IDE 설정
+.vscode/
+.idea/
+
+# OS 자동 파일
+.DS_Store
+Thumbs.db
