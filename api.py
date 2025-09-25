@@ -9,17 +9,12 @@ foods, deltas = load_data()
 
 @app.get("/health")
 def health():
-    """
-    서버 헬스 체크용 엔드포인트.
-    - 상태: ok
-    - 로드된 데이터 개수
-    - 맛 축(axes)
-    - 서버 시간
-    """
+    cats = foods["category"].value_counts().to_dict()
     return {
         "status": "ok",
         "foods_count": int(foods.shape[0]),
         "ingredients_count": int(deltas["ingredient"].nunique()),
+        "categories": cats,
         "axes": TASTE_AXES,
         "server_time": datetime.now().isoformat(timespec="seconds")
     }
