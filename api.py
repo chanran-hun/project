@@ -10,12 +10,17 @@ foods, deltas = load_data()
 @app.get("/health")
 def health():
     cats = foods["category"].value_counts().to_dict()
+    unit_counts = (
+    deltas["unit"].astype(str).str.lower().value_counts(dropna=False).to_dict()
+    )
+
     return {
         "status": "ok",
         "foods_count": int(foods.shape[0]),
         "ingredients_count": int(deltas["ingredient"].nunique()),
         "categories": cats,
         "axes": TASTE_AXES,
+        "unit_counts": unit_counts,
         "server_time": datetime.now().isoformat(timespec="seconds")
     }
 
