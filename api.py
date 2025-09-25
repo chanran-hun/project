@@ -1,11 +1,99 @@
 # api.py
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, HTTPException
 from mvp_core import load_data, compute_final_taste, nearest_foods, compare_sentence, TASTE_AXES
 from datetime import datetime
 from typing import Optional, List
+import numpy as np, pandas as pd
 
 app = FastAPI()
 foods, deltas = load_data()
+
+def _food_row_or_404(name: str) -> pd.Series:
+    name = (name or "").strip()
+    row = foods.loc[foods["name"] == name]
+    if row.empty:
+        examples = foods["name"].head(8).tolist()
+        raise HTTPException(status_code=404, detail=f"음식 '{name}'을(를) 찾을 수 없습니다. 예: {examples}")
+    return row.iloc[0]
+
+def _validate_category(cat: Optional[str]) -> Optional[str]:
+    if not cat:
+        return None
+    valid = set(foods["category"].dropna().unique().tolist())
+    if cat not in valid:
+        raise HTTPException(status_code=400, detail=f"category_filter '{cat}' 미지원. 사용 가능: {sorted(valid)}")
+    return cat
+
+def _as_numeric_axes(s: pd.Series) -> np.ndarray:
+    vals = pd.to_numeric(s[TASTE_AXES], errors="coerce")
+    if vals.isna().any():
+        raise HTTPException(status_code=500, detail="맛 축에 NaN/비숫자 값이 있습니다.")
+    return vals.astype(float).to_numpy(dtype=float)
+
+def _cosine_neighbors(
+    base_food: str,
+    category_filter: Optional[str],
+    topk: int
+) -> pd.DataFrame:
+    # 서브셋 선택
+    df = foods if not category_filter else foods[foods["category"] == category_filter]
+    if df.empty:
+        raise HTTPException(status_code=404, detail=f"카테고리 '{category_filter}'에 데이터가 없습니다.")
+
+    # 축 행렬(X)과 기준 벡터(v) 준비 (숫자만!)
+    X = df[TASTE_AXES].apply(pd.to_numeric, errors="coerce")
+    valid = ~X.isna().any(axis=1)
+    df = df.loc[valid].reset_index(drop=True)
+    X = X.loc[valid].astype(float).to_numpy(dtype=float)
+
+    # 기준 음식 벡터
+    base_row = _food_row_or_404(base_food)
+    v = _as_numeric_axes(base_row)
+
+    # 코사인 유사도 계산
+    denom = (np.linalg.norm(X, axis=1) * (np.linalg.norm(v) + 1e-8)) + 1e-8
+    sims = (X @ v) / denom
+
+    out = df[["name", "category"]].copy()
+    for i, ax in enumerate(TASTE_AXES):
+        out[ax] = X[:, i]
+    out["similarity"] = sims
+
+    # 자기 자신 제거 후 상위 k
+    out = out[out["name"] != base_food]
+    out = out.sort_values("similarity", ascending=False).head(topk).reset_index(drop=True)
+    return out
+
+def _summarize(base_food: str, base_vec: np.ndarray, neighbor_row: pd.Series, max_points: int = 3) -> List[str]:
+    """
+    간단 요약문 생성: 상위 1개 이웃과의 차이를 축별로 정리
+    (임계값: 0.75/1.5)
+    """
+    diffs = base_vec - neighbor_row[TASTE_AXES].astype(float).to_numpy(dtype=float)
+    pairs = list(zip(TASTE_AXES, diffs))
+    # 절대값 큰 순으로 정렬
+    pairs.sort(key=lambda x: abs(x[1]), reverse=True)
+
+    msgs = []
+    count = 0
+    for ax, d in pairs:
+        if abs(d) < 0.5:  # 너무 미세하면 패스
+            continue
+        degree = "훨씬 " if abs(d) >= 1.5 else "조금 "
+        direction = "높아요" if d > 0 else "낮아요"
+        # 한국어 축 라벨(원하면 바꿔도 됩니다)
+        ko = {
+            "sweet": "단맛", "salty": "짠맛", "sour": "신맛",
+            "bitter": "쓴맛", "umami": "감칠맛", "spicy": "매운맛", "fatty": "기름짐"
+        }.get(ax, ax)
+        msgs.append(f"‘{base_food}’은(는) ‘{neighbor_row['name']}’보다 {ko}이 {degree}{direction}.")
+        count += 1
+        if count >= max_points:
+            break
+
+    if not msgs:
+        msgs = [f"‘{base_food}’과(와) ‘{neighbor_row['name']}’의 전반적 맛 프로필은 비슷합니다."]
+    return msgs
 
 @app.get("/health")
 def health():
@@ -119,9 +207,9 @@ def predict(body: dict):
     """
     body 예:
     {
-      "base_food": "곰탕",
-      "additions": [{"ingredient":"된장","amount":4,"unit":"Tbsp"}],
-      "category_filter": "soup"
+        "base_food": "곰탕",
+        "additions": [{"ingredient":"된장","amount":4,"unit":"Tbsp"}],
+        "category_filter": "soup"
     }
     """
     base_vec = foods[foods["name"]==body["base_food"]][TASTE_AXES].values[0]
@@ -138,6 +226,36 @@ def predict(body: dict):
         "comparisons": comparisons
     }
 
+@app.get("/similar")
+def similar_foods(
+    base_food: str = Query(..., description="기준 음식명 (예: 곰탕)"),
+    category_filter: Optional[str] = Query(None, description="필터(예: soup). 미지정시 전체"),
+    topk: int = Query(5, ge=1, le=50, description="추천 개수")
+):
+    try:
+        category_filter = _validate_category(category_filter)
+        base_row = _food_row_or_404(base_food)
+        base_vec = _as_numeric_axes(base_row)  # np.ndarray
+
+        neighbors = _cosine_neighbors(base_food, category_filter, topk)
+        sentences = _summarize(base_food, base_vec, neighbors.iloc[0]) if not neighbors.empty else [
+            "유사 이웃을 찾지 못했습니다."
+        ]
+
+        return {
+            "base_food": base_food,
+            "category_filter_applied": category_filter,
+            "axes": TASTE_AXES,
+            "base_vector": {ax: float(base_row[ax]) for ax in TASTE_AXES},
+            "neighbors": neighbors.assign(similarity=lambda d: d["similarity"].round(4)).to_dict(orient="records"),
+            "sentences": sentences
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"/similar 처리 중 오류: {type(e).__name__}: {e}")
+    
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("api:app", host="127.0.0.1", port=8000, reload=True)
