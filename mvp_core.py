@@ -3,6 +3,10 @@ import pandas as pd
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
+#감칠맛과 매운맛은 똑같은 양이 늘어나도 맛이 달라지는 수치가 다를것이다. 따라서 맛에 따라 가중치를 다르게 적용하느것이 중요
+#맛의 점수에 따라 사람들이 어떻게 느끼는지를 데이터를 계속 쌓아가며 보다 와닿는 맛 표현으로 바꿔야 함. ex) 감칠맛과 짠맛이 일정 수준 이상이고 국물요리라면 깊은 맛이 난다
+#식재료와 맛의 증가에 따라 실제로 인간이 느끼는 맛이 어떤식으로 변하는지에 대한 이론도 정확히 알아내어 함수에 적용시키는 편이 좋을 것이다.
+
 TASTE_AXES = ["sweet","salty","sour","bitter","umami","spicy","fatty"]  #맛 벡터
 AXIS_WEIGHTS = {ax: 1.0 for ax in TASTE_AXES}  #축별 가중치
 
@@ -24,8 +28,7 @@ def load_data():
     deltas = pd.read_csv("ingredient_deltas.csv")
     return foods, deltas
 
-def compute_final_taste(base_vec: np.ndarray, additions: list, deltas_df: pd.DataFrame,
-                        clip_min=0.0, clip_max=10.0):
+def compute_final_taste(base_vec: np.ndarray, additions: list, deltas_df: pd.DataFrame, clip_min=0.0, clip_max=10.0):
     """
     additions 예:
     [{"ingredient":"된장","amount":4,"unit":"Tbsp"}]
