@@ -14,8 +14,17 @@ def health():
     deltas["unit"].astype(str).str.lower().value_counts(dropna=False).to_dict()
     )
 
+    issues = []
+    if foods["name"].duplicated().any(): issues.append("duplicate food name")
+    if deltas["ingredient"].duplicated().any(): issues.append("duplicate ingredient")
+    bad_axes = [ax for ax in TASTE_AXES if ((foods[ax] < 0) | (foods[ax] > 10)).any()]
+    if bad_axes: issues.append(f"foods axis out of [0,10]: {bad_axes}")
+    unrec = deltas[~deltas["unit"].astype(str).str.lower().str.contains("tsp|tbsp", na=False)]
+    if not unrec.empty: issues.append(f"unrecognized units: {sorted(unrec['unit'].astype(str).str.lower().unique())}")
+    status = "ok" if not issues else "warn"
+
     return {
-        "status": "ok",
+        "status": status,
         "foods_count": int(foods.shape[0]),
         "ingredients_count": int(deltas["ingredient"].nunique()),
         "categories": cats,
