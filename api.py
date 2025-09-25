@@ -1,9 +1,8 @@
 # api.py
 from fastapi import FastAPI, Query
 from mvp_core import load_data, compute_final_taste, nearest_foods, compare_sentence, TASTE_AXES
-import numpy as np
 from datetime import datetime
-from typing import Optional, List ,Dict
+from typing import Optional, List
 
 app = FastAPI()
 foods, deltas = load_data()
@@ -130,7 +129,7 @@ def predict(body: dict):
         "comparisons": comparisons
     }
 
+
 if __name__ == "__main__":
-    import uvicorn, webbrowser
-    webbrowser.open("http://127.0.0.1:8000")
+    import uvicorn
     uvicorn.run("api:app", host="127.0.0.1", port=8000, reload=True)

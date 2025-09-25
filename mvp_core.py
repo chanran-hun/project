@@ -82,15 +82,3 @@ def compare_sentence(target_vec, ref_vec, ref_name):
             parts.append(f"{labels[ax]}은 {phrase}")
     body = " , ".join(parts[:3]) if parts else "전반적으로 비슷합니다"
     return f"{ref_name}보다 {body}."
-
-# 사용 예시
-if __name__ == "__main__":
-    foods, deltas = load_data()
-    # 곰탕을 베이스로 가정
-    base = foods[foods["name"]=="곰탕"][TASTE_AXES].values[0]
-    additions = [{"ingredient":"된장","amount":4,"unit":"Tbsp"}]
-    final_vec = compute_final_taste(base, additions, deltas)
-    neighbors = nearest_foods(final_vec, foods, category="soup", topk=2)
-    for _,row in neighbors.iterrows():
-        print(compare_sentence(final_vec, row[TASTE_AXES].values, row["name"]))
-    print("최종 맛 점수:", dict(zip(TASTE_AXES, map(lambda x: round(float(x),1), final_vec))))
