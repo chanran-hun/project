@@ -194,19 +194,6 @@ def list_ingredients(
         "items": [{"ingredient": n} for n in names]
     }
 
-@app.get("/axes")
-def get_axes():
-    """
-    맛 축 메타데이터 반환
-    예) ["sweet","salty","sour","bitter","umami","spicy","fatty"]
-    """
-    # 필요시 라벨/설명까지 확장 가능하도록 구조 준비
-    axes = [{"key": ax, "label": ax.capitalize(), "range": [0, 10]} for ax in TASTE_AXES]
-    return {
-        "count": len(axes),
-        "axes": axes
-    }
-
 @app.post("/predict")
 def predict(body: dict):
     """
