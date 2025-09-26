@@ -6,8 +6,18 @@ from typing import Optional, List
 import numpy as np, pandas as pd
 from fastapi.responses import RedirectResponse
 
-app = FastAPI()
+tags_metadata = [
+    {"name": "Health",     "description": "서버 상태와 데이터 개요"},
+    {"name": "Predict",    "description": "맛 예측 관련 엔드포인트"},
+    {"name": "Similarity", "description": "유사 음식 탐색"},
+    {"name": "Data",       "description": "데이터 조회/점검"},
+]
+app = FastAPI(
+    title="맛 예측 API",
+    openapi_tags=tags_metadata
+)
 foods, deltas = load_data()
+
 
 def _food_row_or_404(name: str) -> pd.Series:
     name = (name or "").strip()
@@ -100,7 +110,7 @@ def _summarize(base_food: str, base_vec: np.ndarray, neighbor_row: pd.Series, ma
 def root():
     return RedirectResponse(url="/docs", status_code=307)
 
-@app.get("/health")
+@app.get("/health", tags=["Health"], summary="상태 점검")
 def health():
     cats = foods["category"].value_counts().to_dict()
     unit_counts = (
@@ -126,7 +136,7 @@ def health():
         "server_time": datetime.now().isoformat(timespec="seconds")
     }
 
-@app.get("/foods")
+@app.get("/foods", tags=["Data"], summary="음식 리스트")
 def list_foods(
     category: Optional[str] = Query(None, description="카테고리로 필터 (예: soup)"),
     search: Optional[str] = Query(None, description="부분 문자열 매칭(대소문자 무시)"),
@@ -166,7 +176,7 @@ def list_foods(
         "items": items
     }
 
-@app.get("/ingredients")
+@app.get("/ingredients", tags=["Data"], summary="식재료 리스트")
 def list_ingredients(
     search: Optional[str] = Query(None, description="부분 문자열 매칭(대소문자 무시)"),
     limit: int = Query(100, ge=1, le=500, description="반환 최대 개수"),
@@ -194,7 +204,7 @@ def list_ingredients(
         "items": [{"ingredient": n} for n in names]
     }
 
-@app.post("/predict")
+@app.post("/predict", tags=["Predict"], summary="맛 예측")
 def predict(body: dict):
     """
     body 예:
@@ -218,7 +228,7 @@ def predict(body: dict):
         "comparisons": comparisons
     }
 
-@app.get("/similar")
+@app.get("/similar", tags=["Similarity"], summary="유사도 추천")
 def similar_foods(
     base_food: str = Query(..., description="기준 음식명 (예: 곰탕)"),
     category_filter: Optional[str] = Query(None, description="필터(예: soup). 미지정시 전체"),
