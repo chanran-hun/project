@@ -110,7 +110,10 @@ def _summarize(base_food: str, base_vec: np.ndarray, neighbor_row: pd.Series, ma
 def root():
     return RedirectResponse(url="/docs", status_code=307)
 
-@app.get("/health", tags=["Health"], summary="상태 점검")
+@app.get("/health", tags=["Health"], 
+            summary="상태 점검 및 데이터 개요",
+            description="서버 상태와 데이터 스냅샷을 반환합니다.\n- 포함: foods/ingredients 개수, 카테고리 분포, 축 목록(axes), 단위 커버리지(unit_counts)\n- 라이트 린트 결과가 있으면 status='warn'으로 표시됩니다."
+            )
 def health():
     cats = foods["category"].value_counts().to_dict()
     unit_counts = (
@@ -136,7 +139,9 @@ def health():
         "server_time": datetime.now().isoformat(timespec="seconds")
     }
 
-@app.get("/foods", tags=["Data"], summary="음식 리스트")
+@app.get("/foods", tags=["Data"], 
+            summary="음식 리스트",
+            description="음식 리스트를 반환합니다.\n- 각 항목: food_id, name, 7개 맛 축, category")
 def list_foods(
     category: Optional[str] = Query(None, description="카테고리로 필터 (예: soup)"),
     search: Optional[str] = Query(None, description="부분 문자열 매칭(대소문자 무시)"),
@@ -176,7 +181,9 @@ def list_foods(
         "items": items
     }
 
-@app.get("/ingredients", tags=["Data"], summary="식재료 리스트")
+@app.get("/ingredients", tags=["Data"], 
+            summary="식재료 리스트",
+            description="재료별 맛 변화량(델타)과 기준 단위를 조회합니다.\n- 각 항목: ingredient, unit(예: 1tsp/1Tbsp), 7개 맛 축 델타, category")
 def list_ingredients(
     search: Optional[str] = Query(None, description="부분 문자열 매칭(대소문자 무시)"),
     limit: int = Query(100, ge=1, le=500, description="반환 최대 개수"),
@@ -204,7 +211,9 @@ def list_ingredients(
         "items": [{"ingredient": n} for n in names]
     }
 
-@app.post("/predict", tags=["Predict"], summary="맛 예측")
+@app.post("/predict", tags=["Predict"],
+            summary="맛 예측",
+            description="기본 음식과 재료 추가로 7가지 맛 축을 예측합니다.\n- 단위: tsp/Tbsp\n- 반환: 최종 맛 벡터, 유사 음식, 설명 문장")
 def predict(body: dict):
     """
     body 예:
@@ -228,7 +237,9 @@ def predict(body: dict):
         "comparisons": comparisons
     }
 
-@app.get("/similar", tags=["Similarity"], summary="유사도 추천")
+@app.get("/similar", tags=["Similarity"], 
+            summary="유사도 추천",
+            description="기준 음식과 맛 프로필이 가까운 음식들을 코사인 유사도로 추천합니다.\n- 쿼리: base_food(필수), category_filter(선택), topk(기본 5)\n- 반환: neighbors(이름/카테고리/7축/유사도), sentences(간단 비교 문장)")
 def similar_foods(
     base_food: str = Query(..., description="기준 음식명 (예: 곰탕)"),
     category_filter: Optional[str] = Query(None, description="필터(예: soup). 미지정시 전체"),
