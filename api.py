@@ -4,6 +4,7 @@ from mvp_core import load_data, compute_final_taste, nearest_foods, compare_sent
 from datetime import datetime
 from typing import Optional, List
 import numpy as np, pandas as pd
+from fastapi.responses import RedirectResponse
 
 app = FastAPI()
 foods, deltas = load_data()
@@ -94,6 +95,10 @@ def _summarize(base_food: str, base_vec: np.ndarray, neighbor_row: pd.Series, ma
     if not msgs:
         msgs = [f"‘{base_food}’과(와) ‘{neighbor_row['name']}’의 전반적 맛 프로필은 비슷합니다."]
     return msgs
+
+@app.get("/", include_in_schema=False)
+def root():
+    return RedirectResponse(url="/docs", status_code=307)
 
 @app.get("/health")
 def health():
