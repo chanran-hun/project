@@ -1,10 +1,11 @@
 # api.py
-from fastapi import FastAPI, Query, HTTPException
+from fastapi import FastAPI, Query, HTTPException, Request
 from mvp_core import load_data, compute_final_taste, nearest_foods, compare_sentence, TASTE_AXES
 from datetime import datetime
 from typing import Optional, List
 import numpy as np, pandas as pd
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, JSONResponse
+import traceback
 
 tags_metadata = [
     {"name": "Health",     "description": "서버 상태와 데이터 개요"},
@@ -18,7 +19,19 @@ app = FastAPI(
 )
 foods, deltas = load_data()
 
-
+# --- compare_sentence: 버전별 호환 래퍼 ---
+def _compare_sentence_safe(base_vec: pd.Series, neigh_df: pd.DataFrame):
+    try:
+        return compare_sentence(base_vec, neigh_df, max_points=3)
+    except TypeError:
+        try:
+            return compare_sentence(base_vec, neigh_df, 3)
+        except TypeError:
+            try:
+                return compare_sentence(base_vec, neigh_df)
+            except Exception:
+                return []
+            
 def _food_row_or_404(name: str) -> pd.Series:
     name = (name or "").strip()
     row = foods.loc[foods["name"] == name]
@@ -106,9 +119,134 @@ def _summarize(base_food: str, base_vec: np.ndarray, neighbor_row: pd.Series, ma
         msgs = [f"‘{base_food}’과(와) ‘{neighbor_row['name']}’의 전반적 맛 프로필은 비슷합니다."]
     return msgs
 
+def _summarize_each(base_vec: pd.Series, neigh_df: pd.DataFrame, max_points: int = 3) -> list[dict]:
+    results = []
+    b = base_vec[TASTE_AXES].astype(float).to_numpy(dtype=float)
+    for _, row in neigh_df.iterrows():
+        diffs = b - row[TASTE_AXES].astype(float).to_numpy(dtype=float)
+        pairs = list(zip(TASTE_AXES, diffs))
+        pairs.sort(key=lambda x: abs(x[1]), reverse=True)
+        msgs, cnt = [], 0
+        for ax, d in pairs:
+            if abs(d) < 0.5:  # 너무 미세하면 생략
+                continue
+            degree = "훨씬 " if abs(d) >= 1.5 else "조금 "
+            direction = "높아요" if d > 0 else "낮아요"
+            ko = {"sweet":"단맛","salty":"짠맛","sour":"신맛","bitter":"쓴맛","umami":"감칠맛","spicy":"매운맛","fatty":"기름짐"}[ax]
+            msgs.append(f"{ko}이 {degree}{direction}.")
+            cnt += 1
+            if cnt >= max_points:
+                break
+        if not msgs:
+            msgs = ["전반적 맛 프로필이 비슷합니다."]
+        results.append({
+            "ref": row["name"],
+            "similarity": float(row["similarity"]),
+            "text": " ".join(msgs)
+        })
+    return results
+
+# --- compute_final_taste: 신/구 시그니처 호환 ---
+def _compute_final_any_version(base_food: str, additions: list[dict]) -> pd.Series:
+    # 1) 신버전: (foods, deltas, base_food, additions)
+    try:
+        res = compute_final_taste(foods, deltas, base_food, additions)
+        final = res["final"] if isinstance(res, dict) and "final" in res else res
+        return final if isinstance(final, pd.Series) else pd.Series(final, index=TASTE_AXES)
+    except TypeError:
+        pass  # 구버전일 가능성
+
+    # 2) 구버전: (base_vec, additions, deltas)
+    row = foods.loc[foods["name"] == base_food]
+    if row.empty:
+        raise HTTPException(status_code=404, detail=f"음식 '{base_food}' 없음.")
+    base_vec = row[TASTE_AXES].iloc[0].astype(float).values
+    res_old = compute_final_taste(base_vec, additions, deltas)
+    if isinstance(res_old, dict) and "final" in res_old:
+        fin = res_old["final"]
+        return fin if isinstance(fin, pd.Series) else pd.Series(fin, index=TASTE_AXES)
+    # numpy 배열 등
+    return pd.Series(res_old, index=TASTE_AXES)
+
+# --- nearest_foods: 신/구 시그니처 호환 ---
+def _nearest_foods_any_version(final_vec: pd.Series, category_filter: str | None, topk: int) -> pd.DataFrame:
+    # 신버전: (foods, final_vec, category_filter=None, topk=3)
+    try:
+        return nearest_foods(foods, final_vec, category_filter=category_filter, topk=topk)
+    except TypeError:
+        # 구버전: (final_vec, foods, category=..., topk=...)
+        return nearest_foods(final_vec, foods, category=category_filter, topk=topk)
+
+def _unit_factor(u: str) -> float:
+    ui = str(u or "").strip().lower()
+    if "tbsp" in ui: return 3.0        # 1 Tbsp = 3 tsp
+    if "tsp"  in ui: return 1.0
+    raise HTTPException(status_code=400, detail=f"지원 단위가 아닙니다: '{u}' (tsp/Tbsp)")
+
+def _delta_per_tsp(row: pd.Series) -> dict:
+    base = str(row.get("unit", "1tsp")).lower()
+    base_factor = 3.0 if "tbsp" in base else 1.0   # CSV 단위가 1Tbsp면 3으로 나눠 tsp 기준으로 환산
+    return {ax: float(row.get(ax, 0.0)) / base_factor for ax in TASTE_AXES}
+
+def _compute_final_linear(base_food: str, additions: list[dict]) -> pd.Series:
+    # 1) 기준 벡터
+    r = foods.loc[foods["name"] == (base_food or "").strip()]
+    if r.empty:
+        examples = foods["name"].head(8).tolist()
+        raise HTTPException(status_code=404, detail=f"음식 '{base_food}' 없음. 예: {examples}")
+    v = r[TASTE_AXES].iloc[0].apply(pd.to_numeric, errors="coerce").astype(float).to_dict()
+
+    # 2) 재료 적용
+    for i, a in enumerate(additions or []):
+        if not isinstance(a, dict):
+            raise HTTPException(status_code=400, detail=f"additions[{i}] 는 객체여야 합니다.")
+        ing = a.get("ingredient"); amt = a.get("amount"); unit = a.get("unit","tsp")
+        row = deltas.loc[deltas["ingredient"] == ing]
+        if row.empty:
+            raise HTTPException(status_code=400, detail=f"재료 '{ing}' 없음 (additions[{i}])")
+        try:
+            amt = float(amt)
+        except:
+            raise HTTPException(status_code=400, detail=f"amount는 숫자여야 함 (additions[{i}])")
+        if amt < 0:
+            raise HTTPException(status_code=400, detail=f"amount는 0 이상이어야 함 (additions[{i}])")
+        tsp_total = amt * _unit_factor(unit)
+        per_tsp = _delta_per_tsp(row.iloc[0])
+        for ax in TASTE_AXES:
+            v[ax] += per_tsp[ax] * tsp_total
+
+    # 3) 0–10 클리핑 후 Series로 반환
+    return pd.Series({ax: float(np.clip(v[ax], 0.0, 10.0)) for ax in TASTE_AXES})
+
+def _cosine_neighbors(final_vec: pd.Series, category_filter: Optional[str], topk: int) -> pd.DataFrame:
+    df = foods if not category_filter else foods[foods["category"] == category_filter]
+    if df.empty:
+        raise HTTPException(status_code=404, detail=f"카테고리 '{category_filter}'에 데이터가 없습니다.")
+    X = df[TASTE_AXES].apply(pd.to_numeric, errors="coerce")
+    valid = ~X.isna().any(axis=1)
+    df = df.loc[valid].reset_index(drop=True)
+    X = X.loc[valid].astype(float).to_numpy(dtype=float)
+    v = final_vec[TASTE_AXES].astype(float).to_numpy(dtype=float)
+    denom = (np.linalg.norm(X, axis=1) * (np.linalg.norm(v) + 1e-8)) + 1e-8
+    sims = (X @ v) / denom
+    out = df[["name","category"]].copy()
+    for i, ax in enumerate(TASTE_AXES):
+        out[ax] = X[:, i]
+    out["similarity"] = sims
+    return out.sort_values("similarity", ascending=False).head(topk).reset_index(drop=True)
+
 @app.get("/", include_in_schema=False)
 def root():
     return RedirectResponse(url="/docs", status_code=307)
+
+# HTTPException은 기본 처리 유지, 나머지 모든 예외를 JSON으로 노출
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    tb = traceback.format_exc().splitlines()[-8:]  # 마지막 8줄만
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"UnhandledError: {type(exc).__name__}: {exc}", "trace": tb},
+    )
 
 @app.get("/health", tags=["Health"], 
             summary="상태 점검 및 데이터 개요",
@@ -215,28 +353,30 @@ def list_ingredients(
             summary="맛 예측",
             description="기본 음식과 재료 추가로 7가지 맛 축을 예측합니다.\n- 단위: tsp/Tbsp\n- 반환: 최종 맛 벡터, 유사 음식, 설명 문장")
 def predict(body: dict):
-    """
-    body 예:
-    {
-        "base_food": "곰탕",
-        "additions": [{"ingredient":"된장","amount":4,"unit":"Tbsp"}],
-        "category_filter": "soup"
-    }
-    """
-    base_vec = foods[foods["name"]==body["base_food"]][TASTE_AXES].values[0]
-    final_vec = compute_final_taste(base_vec, body["additions"], deltas)
-    neighbors = nearest_foods(final_vec, foods, category=body.get("category_filter"), topk=3)
+    try:
+        if not isinstance(body, dict):
+            raise HTTPException(status_code=400, detail="JSON 본문을 보내주세요.")
+        base_food = (body.get("base_food") or "").strip()
+        additions = body.get("additions", [])
+        category_filter = body.get("category_filter")
+        topk = int(body.get("topk", 3))
 
-    comparisons = []
-    for _,row in neighbors.iterrows():
-        sentence = compare_sentence(final_vec, row[TASTE_AXES].values, row["name"])
-        comparisons.append({"ref": row["name"], "similarity": float(row["similarity"]), "text": sentence})
+        final_vec = _compute_final_linear(base_food, additions)
+        neighbors = _cosine_neighbors(final_vec, category_filter, topk)
+        comparisons = _summarize_each(final_vec, neighbors, max_points=3)
 
-    return {
-        "final_scores": {ax: round(float(v),1) for ax,v in zip(TASTE_AXES, final_vec)},
-        "comparisons": comparisons
-    }
-
+        return {
+            "input": {"base_food": base_food, "additions": additions,
+                      "category_filter": category_filter, "topk": topk},
+            "final_scores": {ax: round(float(final_vec[ax]), 1) for ax in TASTE_AXES},
+            "neighbors": neighbors.to_dict(orient="records"),
+            "comparisons": comparisons
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"/predict 처리 중 오류: {type(e).__name__}: {e}")
+    
 @app.get("/similar", tags=["Similarity"], 
             summary="유사도 추천",
             description="기준 음식과 맛 프로필이 가까운 음식들을 코사인 유사도로 추천합니다.\n- 쿼리: base_food(필수), category_filter(선택), topk(기본 5)\n- 반환: neighbors(이름/카테고리/7축/유사도), sentences(간단 비교 문장)")
