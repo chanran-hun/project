@@ -12,7 +12,7 @@ AXIS_WEIGHTS = {ax: 1.0 for ax in TASTE_AXES}  #축별 가중치
 
 UNIT_TO_TBSP = {    #단위 환산
     "TBSP" : 1.0, "tbsp" : 1.0, "T" : 1.0,
-    "tbs" : 1/3, "t" : 1/3,
+    "tbs" : 1/3, "t" : 1/3, "tsp" : 1/3,
     "g" : None, "ml" : None
 }
 
