@@ -285,7 +285,7 @@ def list_foods(
     search: Optional[str] = Query(None, description="부분 문자열 매칭(대소문자 무시)"),
     limit: int = Query(50, ge=1, le=200, description="반환 최대 개수"),
     include_scores: bool = Query(False, description="맛 점수(축 값)까지 포함할지 여부")
-):
+    ):
     """
     지원 음식 목록 조회용 엔드포인트.
     - 예) /foods
@@ -409,6 +409,25 @@ def similar_foods(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"/similar 처리 중 오류: {type(e).__name__}: {e}")
     
+@app.get("/predict/examples", tags=["Predict"], summary="입력 예시 보기")
+def predict_examples():
+    return {
+        "examples": [
+            {"id": "minimal", "summary": "추가 재료 없음",
+             "payload": {"base_food":"곰탕","additions":[]}},
+            {"id": "one_ingredient", "summary": "한 가지 재료",
+             "payload": {"base_food":"곰탕","additions":[{"ingredient":"된장","amount":1,"unit":"Tbsp"}],
+                         "category_filter":"soup","topk":3}},
+            {"id": "multi_ingredients", "summary": "재료 여러 개",
+             "payload": {"base_food":"김치찌개",
+                         "additions":[
+                           {"ingredient":"설탕","amount":1,"unit":"tsp"},
+                           {"ingredient":"다시다","amount":0.5,"unit":"tsp"},
+                           {"ingredient":"고춧가루","amount":0.5,"unit":"Tbsp"}],
+                         "category_filter":"stew","topk":5}}
+        ]
+    }
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("api:app", host="127.0.0.1", port=8000, reload=True)
