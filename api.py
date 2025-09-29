@@ -1,11 +1,13 @@
 # api.py
-from fastapi import FastAPI, Query, HTTPException, Request
+from fastapi import FastAPI, Query, HTTPException, Request, Body
 from mvp_core import load_data, compute_final_taste, nearest_foods, compare_sentence, TASTE_AXES
 from datetime import datetime
 from typing import Optional, List
 import numpy as np, pandas as pd
 from fastapi.responses import RedirectResponse, JSONResponse
 import traceback
+from pydantic import BaseModel, Field
+import time, threading
 
 tags_metadata = [
     {"name": "Health",     "description": "서버 상태와 데이터 개요"},
@@ -18,7 +20,9 @@ app = FastAPI(
     openapi_tags=tags_metadata
 )
 foods, deltas = load_data()
-
+_POSTS: list[dict] = []
+_POST_SEQ = 0
+_POST_LOCK = threading.Lock()
 # --- compare_sentence: 버전별 호환 래퍼 ---
 def _compare_sentence_safe(base_vec: pd.Series, neigh_df: pd.DataFrame):
     try:
@@ -426,6 +430,46 @@ def predict_examples():
                            {"ingredient":"고춧가루","amount":0.5,"unit":"Tbsp"}],
                          "category_filter":"stew","topk":5}}
         ]
+    }
+
+class MiniPostIn(BaseModel):
+    content: str = Field(..., min_length=1, max_length=2000, description="글 내용")
+
+@app.api_route("/board", methods=["GET", "POST"], tags=["Community"],
+              summary="초간단 게시판 (메모리)",
+              description="단일 엔드포인트. POST로 글 작성, GET으로 목록 조회. 서버 재시작 시 전체 초기화됩니다.")
+def board(request: Request,
+          limit: int = 20,
+          offset: int = 0,
+          payload: Optional[MiniPostIn] = Body(None)):
+    """
+    - POST /board  { "content": "첫 글!" }  → 글 생성 + 최신 목록 반환
+    - GET  /board?limit=20&offset=0       → 최신 목록만 반환
+    """
+    global _POST_SEQ
+
+    if request.method == "POST":
+        if payload is None or not payload.content.strip():
+            raise HTTPException(status_code=400, detail="content는 비어있을 수 없습니다.")
+        with _POST_LOCK:
+            _POST_SEQ += 1
+            item = {
+                "id": _POST_SEQ,
+                "ts": time.time(),   # UNIX epoch
+                "content": payload.content.strip()
+            }
+            _POSTS.append(item)
+
+    # 최신순 정렬 후 페이징
+    items = sorted(_POSTS, key=lambda x: x["ts"], reverse=True)
+    sliced = items[offset:offset+limit]
+
+    return {
+        "volatile": True,            # 재시작 시 사라짐 안내
+        "count": len(items),
+        "limit": limit,
+        "offset": offset,
+        "items": sliced
     }
 
 if __name__ == "__main__":
