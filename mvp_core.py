@@ -29,10 +29,6 @@ def load_data():
     return foods, deltas
 
 def compute_final_taste(base_vec: np.ndarray, additions: list, deltas_df: pd.DataFrame, clip_min=0.0, clip_max=10.0):
-    """
-    additions 예:
-    [{"ingredient":"된장","amount":4,"unit":"Tbsp"}]
-    """
     final_vec = base_vec.astype(float).copy()
     for add in additions:
         ing = str(add.get("ingredient","")).strip()
