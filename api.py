@@ -284,18 +284,8 @@ def health():
 @app.get("/foods", tags=["Data"], 
             summary="음식 리스트",
             description="음식 리스트를 반환합니다.\n- 각 항목: food_id, name, 7개 맛 축, category")
-def list_foods(
-    category: Optional[str] = Query(None, description="카테고리로 필터 (예: soup)"),
-    limit: int = Query(50, ge=1, le=200, description="반환 최대 개수"),
-    ):
+def list_foods():
     df = foods
-    if category:
-        # category 열이 없으면 전체 반환(안전)
-        if "category" in df.columns:
-            df = df[df["category"] == category]
-        else:
-            df = df.iloc[0:0]  # 카테고리 열이 없다면 빈 목록
-    df = df.head(limit)
 
     items = []
     for _, row in df.iterrows():
