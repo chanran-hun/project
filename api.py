@@ -308,7 +308,10 @@ def list_ingredients():
     if "ingredient" not in deltas.columns:
         return {"count": 0, "items": []}
 
-    names: List[str] = sorted(deltas["ingredient"].dropna().astype(str).unique().tolist(), key=str.lower)
+    names: List[str] = (
+        deltas["ingredient"].dropna().astype(str).unique().tolist()
+    )  # 정렬 없음, 원래 순서 유지
+
 
     return {
         "count": len(names),
