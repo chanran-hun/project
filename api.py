@@ -324,7 +324,7 @@ def list_ingredients():
 def predict(body: dict):
     try:
         if not isinstance(body, dict):
-            raise HTTPException(status_code=400, detail="JSON 본문을 보내주세요.")
+            raise HTTPException(status_code=400, detail="JSON 형식으로 입력해주세요")
         base_food = (body.get("base_food") or "").strip()
         additions = body.get("additions", [])
         category_filter = body.get("category_filter")
@@ -335,8 +335,7 @@ def predict(body: dict):
         comparisons = _summarize_each(final_vec, neighbors, max_points=3)
 
         return {
-            "input": {"base_food": base_food, "additions": additions,
-                      "category_filter": category_filter, "topk": topk},
+            "input": {"base_food": base_food, "additions": additions,"category_filter": category_filter, "topk": topk},
             "final_scores": {ax: round(float(final_vec[ax]), 1) for ax in TASTE_AXES},
             "neighbors": neighbors.to_dict(orient="records"),
             "comparisons": comparisons
