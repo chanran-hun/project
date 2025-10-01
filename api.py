@@ -304,27 +304,11 @@ def list_foods():
 @app.get("/ingredients", tags=["Data"], 
             summary="식재료 리스트",
             description="재료별 맛 변화량(델타)과 기준 단위를 조회합니다.\n- 각 항목: ingredient, unit(예: 1tsp/1Tbsp), 7개 맛 축 델타, category")
-def list_ingredients(
-    search: Optional[str] = Query(None, description="부분 문자열 매칭(대소문자 무시)"),
-    limit: int = Query(100, ge=1, le=500, description="반환 최대 개수"),
-    sort: str = Query("asc", pattern="^(asc|desc)$", description="정렬 순서: asc | desc")
-):
-    """
-    지원 재료 목록 조회
-    - 예) /ingredients
-    - 예) /ingredients?search=장
-    - 예) /ingredients?limit=50&sort=desc
-    """
+def list_ingredients():
     if "ingredient" not in deltas.columns:
         return {"count": 0, "items": []}
 
     names: List[str] = sorted(deltas["ingredient"].dropna().astype(str).unique().tolist(), key=str.lower)
-    if sort == "desc":
-        names = list(reversed(names))
-    if search:
-        s = search.lower()
-        names = [n for n in names if s in n.lower()]
-    names = names[:limit]
 
     return {
         "count": len(names),
