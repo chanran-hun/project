@@ -10,36 +10,36 @@ from sklearn.metrics.pairwise import cosine_similarity
 TASTE_AXES = ["sweet","salty","sour","bitter","umami","spicy","fatty"]  #맛 벡터
 AXIS_WEIGHTS = {ax: 1.0 for ax in TASTE_AXES}  #축별 가중치
 
-UNIT_TO_TBSP = {    #단위 환산
-    "TBSP" : 1.0, "tbsp" : 1.0, "T" : 1.0,
-    "tbs" : 1/3, "t" : 1/3, "tsp" : 1/3,
-    "g" : None, "ml" : None
-}
-
-def _to_tbsp(amount: float, unit: str): #단위 환산 함수
-    if unit in UNIT_TO_TBSP and UNIT_TO_TBSP[unit] is not None:
-        return amount * UNIT_TO_TBSP[unit]
-    # 모르는 단위는 일단 “1Tbsp ≈ 1”로 보정해 사용 (경고만 출력)
-    print(f"[warn] 미지원 단위: {unit}. 임시로 1Tbsp 환산 없이 사용합니다.")
-    return amount
-
 def load_data():
     foods = pd.read_csv("foods.csv")
     deltas = pd.read_csv("ingredient_deltas.csv")
     return foods, deltas
+
+UNIT_TO_TSP = {    #단위 환산
+    "TBSP" : 3.0, "tbsp" : 3.0, "T" : 3.0,"tbs" : 3.0, "Tbsp" : 3.0,
+    "t" : 1.0, "tsp" : 1.0,
+    "g" : None, "ml" : None
+}
+
+def _to_tsp(amount: float, unit: str): #단위 환산 함수
+    if unit in UNIT_TO_TSP and UNIT_TO_TSP[unit] is not None:
+        return amount * UNIT_TO_TSP[unit]
+    # 모르는 단위는 일단 “1Tbsp ≈ 1”로 보정해 사용 (경고만 출력)
+    print(f"[warn] 미지원 단위: {unit}. 임시로 1Tbsp 환산 없이 사용합니다.")
+    return amount
 
 def compute_final_taste(base_vec: np.ndarray, additions: list, deltas_df: pd.DataFrame, clip_min=0.0, clip_max=10.0):
     final_vec = base_vec.astype(float).copy()
     for add in additions:
         ing = str(add.get("ingredient","")).strip()
         amt = float(add.get("amount", 0))
-        unit = add.get("unit", "Tbsp")
+        unit = add.get("unit", "tsp")
 
-        amt_tbsp = _to_tbsp(amt, unit)
+        amt_tbsp = _to_tsp(amt, unit)
 
-        row = deltas_df[(deltas_df["ingredient"]==ing) & (deltas_df["unit"]=="1Tbsp")]
+        row = deltas_df[(deltas_df["ingredient"]==ing) & (deltas_df["unit"]=="1tsp")]
         if row.empty:
-            # 1Tbsp 기준 데이터가 없으면 단위 그대로 시도
+            # 1tsp 기준 데이터가 없으면 단위 그대로 시도
             row = deltas_df[(deltas_df["ingredient"]==ing) & (deltas_df["unit"]==f"1{unit}")]
         if row.empty:
             print(f"[warn] 델타 미존재: {ing} ({unit}) → 무시")

@@ -192,36 +192,6 @@ def _delta_per_tsp(row: pd.Series) -> dict:
     base_factor = 3.0 if "tbsp" in base else 1.0   # CSV 단위가 1Tbsp면 3으로 나눠 tsp 기준으로 환산
     return {ax: float(row.get(ax, 0.0)) / base_factor for ax in TASTE_AXES}
 
-def _compute_final_linear(base_food: str, additions: list[dict]) -> pd.Series:
-    # 1) 기준 벡터
-    r = foods.loc[foods["name"] == (base_food or "").strip()]
-    if r.empty:
-        examples = foods["name"].head(8).tolist()
-        raise HTTPException(status_code=404, detail=f"음식 '{base_food}' 없음. 예: {examples}")
-    v = r[TASTE_AXES].iloc[0].apply(pd.to_numeric, errors="coerce").astype(float).to_dict()
-
-    # 2) 재료 적용
-    for i, a in enumerate(additions or []):
-        if not isinstance(a, dict):
-            raise HTTPException(status_code=400, detail=f"additions[{i}] 는 객체여야 합니다.")
-        ing = a.get("ingredient"); amt = a.get("amount"); unit = a.get("unit","tsp")
-        row = deltas.loc[deltas["ingredient"] == ing]
-        if row.empty:
-            raise HTTPException(status_code=400, detail=f"재료 '{ing}' 없음 (additions[{i}])")
-        try:
-            amt = float(amt)
-        except:
-            raise HTTPException(status_code=400, detail=f"amount는 숫자여야 함 (additions[{i}])")
-        if amt < 0:
-            raise HTTPException(status_code=400, detail=f"amount는 0 이상이어야 함 (additions[{i}])")
-        tsp_total = amt * _unit_factor(unit)
-        per_tsp = _delta_per_tsp(row.iloc[0])
-        for ax in TASTE_AXES:
-            v[ax] += per_tsp[ax] * tsp_total
-
-    # 3) 0–10 클리핑 후 Series로 반환
-    return pd.Series({ax: float(np.clip(v[ax], 0.0, 10.0)) for ax in TASTE_AXES})
-
 def _cosine_neighbors(final_vec: pd.Series, category_filter: Optional[str], topk: int) -> pd.DataFrame:
     df = foods if not category_filter else foods[foods["category"] == category_filter]
     if df.empty:
@@ -317,6 +287,36 @@ def list_ingredients():
         "count": len(names),
         "items": [{"ingredient": n} for n in names]
     }
+
+def _compute_final_linear(base_food: str, additions: list[dict]) -> pd.Series:
+    # 기준 벡터
+    r = foods.loc[foods["name"] == (base_food or "").strip()]
+    if r.empty:
+        examples = foods["name"].head(8).tolist()
+        raise HTTPException(status_code=404, detail=f"음식 '{base_food}' 없음. 예: {examples}")
+    v = r[TASTE_AXES].iloc[0].apply(pd.to_numeric, errors="coerce").astype(float).to_dict()
+
+    # 재료 적용
+    for i, a in enumerate(additions or []):
+        if not isinstance(a, dict):
+            raise HTTPException(status_code=400, detail=f"additions[{i}] 는 객체여야 합니다.")
+        ing = a.get("ingredient"); amt = a.get("amount"); unit = a.get("unit","tsp")
+        row = deltas.loc[deltas["ingredient"] == ing]
+        if row.empty:
+            raise HTTPException(status_code=400, detail=f"재료 '{ing}' 없음 (additions[{i}])")
+        try:
+            amt = float(amt)
+        except:
+            raise HTTPException(status_code=400, detail=f"amount는 숫자여야 함 (additions[{i}])")
+        if amt < 0:
+            raise HTTPException(status_code=400, detail=f"amount는 0 이상이어야 함 (additions[{i}])")
+        tsp_total = amt * _unit_factor(unit)
+        per_tsp = _delta_per_tsp(row.iloc[0])
+        for ax in TASTE_AXES:
+            v[ax] += per_tsp[ax] * tsp_total
+
+    # 3) 0–10 클리핑 후 Series로 반환
+    return pd.Series({ax: float(np.clip(v[ax], 0.0, 10.0)) for ax in TASTE_AXES})
 
 @app.post("/predict", tags=["Predict"],
             summary="맛 예측",
