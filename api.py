@@ -58,40 +58,6 @@ def _as_numeric_axes(s: pd.Series) -> np.ndarray:
         raise HTTPException(status_code=500, detail="맛 축에 NaN/비숫자 값이 있습니다.")
     return vals.astype(float).to_numpy(dtype=float)
 
-def _cosine_neighbors(
-    base_food: str,
-    category_filter: Optional[str],
-    topk: int
-) -> pd.DataFrame:
-    # 서브셋 선택
-    df = foods if not category_filter else foods[foods["category"] == category_filter]
-    if df.empty:
-        raise HTTPException(status_code=404, detail=f"카테고리 '{category_filter}'에 데이터가 없습니다.")
-
-    # 축 행렬(X)과 기준 벡터(v) 준비 (숫자만!)
-    X = df[TASTE_AXES].apply(pd.to_numeric, errors="coerce")
-    valid = ~X.isna().any(axis=1)
-    df = df.loc[valid].reset_index(drop=True)
-    X = X.loc[valid].astype(float).to_numpy(dtype=float)
-
-    # 기준 음식 벡터
-    base_row = _food_row_or_404(base_food)
-    v = _as_numeric_axes(base_row)
-
-    # 코사인 유사도 계산
-    denom = (np.linalg.norm(X, axis=1) * (np.linalg.norm(v) + 1e-8)) + 1e-8
-    sims = (X @ v) / denom
-
-    out = df[["name", "category"]].copy()
-    for i, ax in enumerate(TASTE_AXES):
-        out[ax] = X[:, i]
-    out["similarity"] = sims
-
-    # 자기 자신 제거 후 상위 k
-    out = out[out["name"] != base_food]
-    out = out.sort_values("similarity", ascending=False).head(topk).reset_index(drop=True)
-    return out
-
 def _summarize(base_food: str, base_vec: np.ndarray, neighbor_row: pd.Series, max_points: int = 3) -> List[str]:
     """
     간단 요약문 생성: 상위 1개 이웃과의 차이를 축별로 정리
@@ -317,6 +283,40 @@ def _compute_final_linear(base_food: str, additions: list[dict]) -> pd.Series:
 
     # 3) 0–10 클리핑 후 Series로 반환
     return pd.Series({ax: float(np.clip(v[ax], 0.0, 10.0)) for ax in TASTE_AXES})
+
+def _cosine_neighbors(
+    base_food: str,
+    category_filter: Optional[str],
+    topk: int
+) -> pd.DataFrame:
+    # 서브셋 선택
+    df = foods if not category_filter else foods[foods["category"] == category_filter]
+    if df.empty:
+        raise HTTPException(status_code=404, detail=f"카테고리 '{category_filter}'에 데이터가 없습니다.")
+
+    # 축 행렬(X)과 기준 벡터(v) 준비 (숫자만!)
+    X = df[TASTE_AXES].apply(pd.to_numeric, errors="coerce")
+    valid = ~X.isna().any(axis=1)
+    df = df.loc[valid].reset_index(drop=True)
+    X = X.loc[valid].astype(float).to_numpy(dtype=float)
+
+    # 기준 음식 벡터
+    base_row = _food_row_or_404(base_food)
+    v = _as_numeric_axes(base_row)
+
+    # 코사인 유사도 계산
+    denom = (np.linalg.norm(X, axis=1) * (np.linalg.norm(v) + 1e-8)) + 1e-8
+    sims = (X @ v) / denom
+
+    out = df[["name", "category"]].copy()
+    for i, ax in enumerate(TASTE_AXES):
+        out[ax] = X[:, i]
+    out["similarity"] = sims
+
+    # 자기 자신 제거 후 상위 k
+    out = out[out["name"] != base_food]
+    out = out.sort_values("similarity", ascending=False).head(topk).reset_index(drop=True)
+    return out
 
 @app.post("/predict", tags=["Predict"],
             summary="맛 예측",
