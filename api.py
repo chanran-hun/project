@@ -207,9 +207,7 @@ def _summarize_each(base_vec: pd.Series, neigh_df: pd.DataFrame, max_points: int
         })
     return results
 
-# -----------------------------
-# Routes
-# -----------------------------
+#홈페이지로 바로 이동
 @app.get("/", include_in_schema=False)
 def root():
     return RedirectResponse(url="/docs", status_code=307)
