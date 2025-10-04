@@ -212,10 +212,12 @@ def _summarize_each(base_vec: pd.Series, neigh_df: pd.DataFrame, max_points: int
 def root():
     return RedirectResponse(url="/docs", status_code=307)
 
-# HTTPException은 기본 처리 유지, 나머지 모든 예외를 JSON으로 노출
+#예외 처리
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
+    #오류 위치 정보
     tb = traceback.format_exc().splitlines()[-8:]
+    #JSON 형태로 에러 반환
     return JSONResponse(
         status_code=500,
         content={"detail": f"UnhandledError: {type(exc).__name__}: {exc}", "trace": tb},
