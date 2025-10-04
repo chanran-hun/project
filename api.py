@@ -89,33 +89,6 @@ def _summarize(base_food: str, base_vec: np.ndarray, neighbor_row: pd.Series, ma
         msgs = [f"‘{base_food}’과(와) ‘{neighbor_row['name']}’의 전반적 맛 프로필은 비슷합니다."]
     return msgs
 
-def _summarize_each(base_vec: pd.Series, neigh_df: pd.DataFrame, max_points: int = 3) -> list[dict]:
-    results = []
-    b = base_vec[TASTE_AXES].astype(float).to_numpy(dtype=float)
-    for _, row in neigh_df.iterrows():
-        diffs = b - row[TASTE_AXES].astype(float).to_numpy(dtype=float)
-        pairs = list(zip(TASTE_AXES, diffs))
-        pairs.sort(key=lambda x: abs(x[1]), reverse=True)
-        msgs, cnt = [], 0
-        for ax, d in pairs:
-            if abs(d) < 0.5:  # 너무 미세하면 생략
-                continue
-            degree = "훨씬 " if abs(d) >= 1.5 else "조금 "
-            direction = "높아요" if d > 0 else "낮아요"
-            ko = {"sweet":"단맛","salty":"짠맛","sour":"신맛","bitter":"쓴맛","umami":"감칠맛","spicy":"매운맛","fatty":"기름짐"}[ax]
-            msgs.append(f"{ko}이 {degree}{direction}.")
-            cnt += 1
-            if cnt >= max_points:
-                break
-        if not msgs:
-            msgs = ["전반적 맛 프로필이 비슷합니다."]
-        results.append({
-            "ref": row["name"],
-            "similarity": float(row["similarity"]),
-            "text": " ".join(msgs)
-        })
-    return results
-
 # --- compute_final_taste: 신/구 시그니처 호환 ---
 def _compute_final_any_version(base_food: str, additions: list[dict]) -> pd.Series:
     # 1) 신버전: (foods, deltas, base_food, additions)
@@ -317,6 +290,33 @@ def _cosine_neighbors(
     out = out[out["name"] != base_food]
     out = out.sort_values("similarity", ascending=False).head(topk).reset_index(drop=True)
     return out
+
+def _summarize_each(base_vec: pd.Series, neigh_df: pd.DataFrame, max_points: int = 3) -> list[dict]:
+    results = []
+    b = base_vec[TASTE_AXES].astype(float).to_numpy(dtype=float)
+    for _, row in neigh_df.iterrows():
+        diffs = b - row[TASTE_AXES].astype(float).to_numpy(dtype=float)
+        pairs = list(zip(TASTE_AXES, diffs))
+        pairs.sort(key=lambda x: abs(x[1]), reverse=True)
+        msgs, cnt = [], 0
+        for ax, d in pairs:
+            if abs(d) < 0.5:  # 너무 미세하면 생략
+                continue
+            degree = "훨씬 " if abs(d) >= 1.5 else "조금 "
+            direction = "높아요" if d > 0 else "낮아요"
+            ko = {"sweet":"단맛","salty":"짠맛","sour":"신맛","bitter":"쓴맛","umami":"감칠맛","spicy":"매운맛","fatty":"기름짐"}[ax]
+            msgs.append(f"{ko}이 {degree}{direction}.")
+            cnt += 1
+            if cnt >= max_points:
+                break
+        if not msgs:
+            msgs = ["전반적 맛 프로필이 비슷합니다."]
+        results.append({
+            "ref": row["name"],
+            "similarity": float(row["similarity"]),
+            "text": " ".join(msgs)
+        })
+    return results
 
 @app.post("/predict", tags=["Predict"],
             summary="맛 예측",
