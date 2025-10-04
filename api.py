@@ -327,7 +327,15 @@ def predict(body: dict):
             raise HTTPException(status_code=400, detail="JSON 형식으로 입력해주세요")
         base_food = (body.get("base_food") or "").strip()
         additions = body.get("additions", [])
+        if not isinstance(additions, list):
+            raise HTTPException(status_code=400, detail="additions는 리스트여야 합니다.")
+        
         category_filter = body.get("category_filter")
+        if category_filter is None or (isinstance(category_filter, str) and category_filter.strip() == ""):
+            category_filter = None
+        elif not isinstance(category_filter, str):
+            raise HTTPException(status_code=400, detail="category_filter는 문자열이어야 합니다.")
+
         topk = int(body.get("topk", 3))
 
         final_vec = _compute_final_linear(base_food, additions)
