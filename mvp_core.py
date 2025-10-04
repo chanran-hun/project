@@ -24,8 +24,8 @@ UNIT_TO_TSP = {    #단위 환산
 def _to_tsp(amount: float, unit: str): #단위 환산 함수
     if unit in UNIT_TO_TSP and UNIT_TO_TSP[unit] is not None:
         return amount * UNIT_TO_TSP[unit]
-    # 모르는 단위는 일단 “1Tbsp ≈ 1”로 보정해 사용 (경고만 출력)
-    print(f"[warn] 미지원 단위: {unit}. 임시로 1Tbsp 환산 없이 사용합니다.")
+    # 모르는 단위는 일단 “1tsp ≈ 1”로 보정해 사용 (경고만 출력)
+    print(f"[warn] 미지원 단위: {unit}. 임시로 1tsp 환산 없이 사용합니다.")
     return amount
 
 def compute_final_taste(base_vec: np.ndarray, additions: list, deltas_df: pd.DataFrame, clip_min=0.0, clip_max=10.0):
