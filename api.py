@@ -248,6 +248,35 @@ def health():
         "server_time": datetime.now().isoformat(timespec="seconds")
     }
 
+@app.post("/predict", tags=["Predict"], summary="맛 예측",description="기본 음식과 재료 추가로 7가지 맛 축을 예측합니다.\n- 단위: tsp/Tbsp\n- 반환: 최종 맛 벡터, 유사 음식, 설명 문장")
+def predict(body: dict):
+    try:
+        if not isinstance(body, dict):
+            raise HTTPException(status_code=400, detail="JSON 형식으로 입력해주세요")
+        base_food = (body.get("base_food") or "").strip()
+        additions = body.get("additions", [])
+        if not isinstance(additions, list):
+            raise HTTPException(status_code=400, detail="additions는 리스트여야 합니다.")
+        category_filter = body.get("category_filter")
+        if category_filter is None or (isinstance(category_filter, str) and category_filter.strip() == ""):
+            category_filter = None
+        elif not isinstance(category_filter, str):
+            raise HTTPException(status_code=400, detail="category_filter는 문자열이어야 합니다.")
+        topk = int(body.get("topk", 3))
+        final_vec = _compute_final_linear(base_food, additions)
+        neighbors = _cosine_neighbors(final_vec, category_filter, topk)
+        comparisons = _summarize_each(final_vec, neighbors, max_points=3)
+        return {
+            "input": {"base_food": base_food, "additions": additions, "category_filter": category_filter, "topk": topk},
+            "final_scores": {ax: round(float(final_vec[ax]), 1) for ax in TASTE_AXES},
+            "neighbors": neighbors.to_dict(orient="records"),
+            "comparisons": comparisons
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"/predict 처리 중 오류: {type(e).__name__}: {e}")
+
 @app.get("/foods", tags=["Data"],
          summary="음식 리스트",
          description="음식 리스트를 반환합니다.\n- 각 항목: food_id, name, 7개 맛 축, category")
@@ -277,37 +306,6 @@ def list_ingredients():
         "count": len(names),
         "items": [{"ingredient": n} for n in names]
     }
-
-@app.post("/predict", tags=["Predict"],
-          summary="맛 예측",
-          description="기본 음식과 재료 추가로 7가지 맛 축을 예측합니다.\n- 단위: tsp/Tbsp\n- 반환: 최종 맛 벡터, 유사 음식, 설명 문장")
-def predict(body: dict):
-    try:
-        if not isinstance(body, dict):
-            raise HTTPException(status_code=400, detail="JSON 형식으로 입력해주세요")
-        base_food = (body.get("base_food") or "").strip()
-        additions = body.get("additions", [])
-        if not isinstance(additions, list):
-            raise HTTPException(status_code=400, detail="additions는 리스트여야 합니다.")
-        category_filter = body.get("category_filter")
-        if category_filter is None or (isinstance(category_filter, str) and category_filter.strip() == ""):
-            category_filter = None
-        elif not isinstance(category_filter, str):
-            raise HTTPException(status_code=400, detail="category_filter는 문자열이어야 합니다.")
-        topk = int(body.get("topk", 3))
-        final_vec = _compute_final_linear(base_food, additions)
-        neighbors = _cosine_neighbors(final_vec, category_filter, topk)
-        comparisons = _summarize_each(final_vec, neighbors, max_points=3)
-        return {
-            "input": {"base_food": base_food, "additions": additions, "category_filter": category_filter, "topk": topk},
-            "final_scores": {ax: round(float(final_vec[ax]), 1) for ax in TASTE_AXES},
-            "neighbors": neighbors.to_dict(orient="records"),
-            "comparisons": comparisons
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"/predict 처리 중 오류: {type(e).__name__}: {e}")
 
 @app.get("/similar", tags=["Similarity"],
          summary="유사도 추천",
