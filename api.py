@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 import time, threading
 import os
 
+#맛 벡터와 가중치
 TASTE_AXES = ["sweet","salty","sour","bitter","umami","spicy","fatty"]
 AXIS_WEIGHTS = {ax: 1.0 for ax in TASTE_AXES}
 
@@ -19,7 +20,6 @@ UNIT_TO_TSP = {
 }
 
 # CSV 로딩 (상대경로 또는 /mnt/data 모두 시도)
-# - 프로젝트/배포 환경 차이를 흡수하기 위해 경로 후보를 순차적으로 검사합니다.
 _DEF_FOODS_CANDIDATES = [
     "foods.csv",
     os.path.join("/mnt/data", "foods.csv")
@@ -338,9 +338,7 @@ def similar_foods(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"/similar 처리 중 오류: {type(e).__name__}: {e}")
 
-@app.get("/predict1", tags=["Predict"],
-         summary="간단 예측(한 개 재료, 비-JSON)",
-         description=(
+@app.get("/predict1", tags=["Predict"],summary="간단 예측(한 개 재료, 비-JSON)",description=(
              "쿼리스트링 또는 폼으로 입력받아 맛을 예측합니다.\n"
              "- 필수: base_food, ingredient\n"
              "- 옵션: amount(기본 1), unit(tsp|Tbsp, 기본 tsp), category_filter, topk(기본 3)\n"
