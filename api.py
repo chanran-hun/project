@@ -338,6 +338,54 @@ def similar_foods(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"/similar 처리 중 오류: {type(e).__name__}: {e}")
 
+@app.get("/predict1", tags=["Predict"],
+         summary="간단 예측(한 개 재료, 비-JSON)",
+         description=(
+             "쿼리스트링 또는 폼으로 입력받아 맛을 예측합니다.\n"
+             "- 필수: base_food, ingredient\n"
+             "- 옵션: amount(기본 1), unit(tsp|Tbsp, 기본 tsp), category_filter, topk(기본 3)\n"
+             "- 반환: 기존 /predict와 유사한 구조"
+         ))
+
+@app.post("/predict1", tags=["Predict"], include_in_schema=False)
+def predict_one_ingredient(
+    # GET 쿼리 또는 POST 폼 양쪽 지원
+    base_food: str = Query(..., description="기준 음식명 (예: 곰탕)"),
+    ingredient: str = Query(..., description="추가할 재료명 (데이터 기준)"),
+    amount: float = Query(1.0, ge=0, description="양 (기본 1)"),
+    unit: str = Query("tsp", description="단위: tsp 또는 Tbsp"),
+    category_filter: Optional[str] = Query(None, description="추천 필터(예: soup)"),
+    topk: int = Query(3, ge=1, le=50, description="추천 개수"),
+):
+    try:
+        # 1) 최종 맛 벡터 계산 (한 개 재료만)
+        additions = [{"ingredient": ingredient, "amount": amount, "unit": unit}]
+        final_vec = _compute_final_linear(base_food, additions)
+
+        # 2) 유사 음식
+        neighbors = _cosine_neighbors(final_vec, category_filter, topk)
+
+        # 3) 간단 비교 문장
+        comparisons = _summarize_each(final_vec, neighbors, max_points=3)
+
+        return {
+            "input": {
+                "base_food": base_food,
+                "ingredient": ingredient,
+                "amount": amount,
+                "unit": unit,
+                "category_filter": category_filter,
+                "topk": topk,
+            },
+            "final_scores": {ax: round(float(final_vec[ax]), 1) for ax in TASTE_AXES},
+            "neighbors": neighbors.to_dict(orient="records"),
+            "comparisons": comparisons,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"/predict1 처리 중 오류: {type(e).__name__}: {e}")
+    
 # 초간단 게시판
 class MiniPostIn(BaseModel):
     content: str = Field(..., min_length=1, max_length=2000, description="글 내용")
