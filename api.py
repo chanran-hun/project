@@ -194,7 +194,7 @@ def _summarize_each(base_vec: pd.Series, neigh_df: pd.DataFrame, max_points: int
             degree = "훨씬 " if abs(d) >= 1.5 else "조금 "
             direction = "높아요" if d > 0 else "낮아요"
             ko = {"sweet":"단맛","salty":"짠맛","sour":"신맛","bitter":"쓴맛","umami":"감칠맛","spicy":"매운맛","fatty":"기름짐"}[ax]
-            msgs.append(f"{row['name']}보다 {ko}이 {degree}{direction}.")
+            msgs.append(f"새로운 결과물이 {row['name']}보다 {ko}이 {degree}{direction}.")
             cnt += 1
             if cnt >= max_points:
                 break
