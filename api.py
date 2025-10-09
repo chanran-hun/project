@@ -160,24 +160,36 @@ def _summarize(base_food: str, base_vec: np.ndarray, neighbor_row: pd.Series, ma
     diffs = base_vec - neighbor_row[TASTE_AXES].astype(float).to_numpy(dtype=float)
     pairs = list(zip(TASTE_AXES, diffs))
     pairs.sort(key=lambda x: abs(x[1]), reverse=True)
-    msgs = []
-    count = 0
+
+    # 차이가 유의미한 축만 추려서 (축 한글명, 강도, 방향) 저장
+    difflist = []
     for ax, d in pairs:
         if abs(d) < 0.5:
             continue
         degree = "훨씬 " if abs(d) >= 1.5 else "조금 "
-        direction = "높아요" if d > 0 else "낮아요"
+        is_up = (d > 0)
         ko = {
             "sweet": "단맛", "salty": "짠맛", "sour": "신맛",
             "bitter": "쓴맛", "umami": "감칠맛", "spicy": "매운맛", "fatty": "기름짐"
-        }.get(ax, ax)
-        msgs.append(f"‘{base_food}’은(는) ‘{neighbor_row['name']}’보다 {ko}이 {degree}{direction}.")
-        count += 1
-        if count >= max_points:
+        }[ax]
+        difflist.append((ko, degree, is_up))
+        if len(difflist) >= max_points:
             break
-    if not msgs:
-        msgs = [f"‘{base_food}’은(는) ‘{neighbor_row['name']}’와(과) 맛이 전반적으로 비슷합니다."]
-    return msgs
+
+    if not difflist:
+        return [f"‘{base_food}’은(는) ‘{neighbor_row['name']}’와(과) 맛이 전반적으로 비슷합니다."]
+
+    # 한 문장으로 결합: 중간은 “…높고/낮고”, 마지막은 “…높습니다/낮습니다”
+    parts = []
+    for i, (ko, degree, is_up) in enumerate(difflist):
+        is_last = (i == len(difflist) - 1)
+        if is_last:
+            parts.append(f"{ko}은 {degree}{'높습니다' if is_up else '낮습니다'}")
+        else:
+            parts.append(f"{ko}은 {degree}{'높고' if is_up else '낮고'}")
+    text = f"‘{base_food}’은(는) ‘{neighbor_row['name']}’보다 " + ", ".join(parts) + "."
+
+    return [text]
 
 
 def _summarize_each(base_vec: pd.Series, neigh_df: pd.DataFrame, max_points: int = 3) -> list[dict]:
