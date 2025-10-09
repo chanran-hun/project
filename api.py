@@ -183,29 +183,51 @@ def _summarize(base_food: str, base_vec: np.ndarray, neighbor_row: pd.Series, ma
 def _summarize_each(base_vec: pd.Series, neigh_df: pd.DataFrame, max_points: int = 3) -> list[dict]:
     results = []
     b = base_vec[TASTE_AXES].astype(float).to_numpy(dtype=float)
+
     for _, row in neigh_df.iterrows():
         diffs = b - row[TASTE_AXES].astype(float).to_numpy(dtype=float)
         pairs = list(zip(TASTE_AXES, diffs))
         pairs.sort(key=lambda x: abs(x[1]), reverse=True)
-        msgs, cnt = [], 0
+
+        # 차이점 추출 (문장 조립용 최소 정보만 저장)
+        difflist = []
         for ax, d in pairs:
             if abs(d) < 0.5:
                 continue
             degree = "훨씬 " if abs(d) >= 1.5 else "조금 "
-            direction = "높아요" if d > 0 else "낮아요"
-            ko = {"sweet":"단맛","salty":"짠맛","sour":"신맛","bitter":"쓴맛","umami":"감칠맛","spicy":"매운맛","fatty":"기름짐"}[ax]
-            msgs.append(f"새로운 결과물이 {row['name']}보다 {ko}이 {degree}{direction}.")
-            cnt += 1
-            if cnt >= max_points:
+            is_up = (d > 0)
+            ko = {
+                "sweet": "단맛", "salty": "짠맛", "sour": "신맛",
+                "bitter": "쓴맛", "umami": "감칠맛", "spicy": "매운맛", "fatty": "기름짐"
+            }[ax]
+            difflist.append((ko, degree, is_up))
+            if len(difflist) >= max_points:
                 break
-        if not msgs:
-            msgs = ["전반적 맛 프로필이 비슷합니다."]
+
+        # 문장 생성
+        if not difflist:
+            text = f"새로운 결과물은 {row['name']}과(와) 전반적 맛 프로필이 비슷합니다."
+        else:
+            # 비교 대상 프리픽스: "~보다 "
+            prefix = f"새로운 결과물은 {row['name']}보다 "
+            parts = []
+            for i, (ko, degree, is_up) in enumerate(difflist):
+                is_last = (i == len(difflist) - 1)
+                if is_last:
+                    # 마지막 항목은 평서형 종결
+                    parts.append(f"{ko}이 {degree}{'높습니다' if is_up else '낮습니다'}.")
+                else:
+                    # 중간 항목은 연결어미
+                    parts.append(f"{ko}이 {degree}{'높고' if is_up else '낮고'} ")
+            text = prefix + "".join(parts)
+
         results.append({
             "ref": row["name"],
             "similarity": float(row["similarity"]),
-            "text": " ".join(msgs)
+            "text": text
         })
     return results
+
 
 #홈페이지로 바로 이동
 @app.get("/", include_in_schema=False)
