@@ -176,7 +176,7 @@ def _summarize(base_food: str, base_vec: np.ndarray, neighbor_row: pd.Series, ma
         if count >= max_points:
             break
     if not msgs:
-        msgs = [f"‘{base_food}’과(와) ‘{neighbor_row['name']}’의 전반적 맛 프로필은 비슷합니다."]
+        msgs = [f"‘{base_food}’은(는) ‘{neighbor_row['name']}’와(과) 맛이 전반적으로 비슷합니다."]
     return msgs
 
 
@@ -344,9 +344,15 @@ def similar_foods(
         # 자기 자신 제거를 위해 base_food 이름을 전달하지 않고 벡터 기반 계산만 사용
         neighbors_df = _cosine_neighbors(pd.Series({ax: float(base_row[ax]) for ax in TASTE_AXES}), category_filter, topk+1)
         neighbors_df = neighbors_df[neighbors_df["name"] != base_food].head(topk).reset_index(drop=True)
-        sentences = _summarize(base_food, base_vec, neighbors_df.iloc[0]) if not neighbors_df.empty else [
+        sentences = [
+            _summarize(base_food, base_vec, row)
+            for _, row in neighbors_df.iterrows()
+        ] if not neighbors_df.empty else [
             "유사 이웃을 찾지 못했습니다."
         ]
+        # 리스트의 리스트를 평탄화 (각 음식마다 여러 문장일 수 있으므로)
+        sentences = [s for sub in sentences for s in sub]
+        
         return {
             "base_food": base_food,
             "category_filter_applied": category_filter,
