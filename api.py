@@ -218,7 +218,7 @@ def _summarize_each(base_vec: pd.Series, neigh_df: pd.DataFrame, max_points: int
 
         # 문장 생성
         if not difflist:
-            text = f"새로운 결과물은 {row['name']}과(와) 전반적 맛 프로필이 비슷합니다."
+            text = f"새로운 결과물은 {row['name']}과(와) 맛이 전반적으로 비슷합니다."
         else:
             # 비교 대상 프리픽스: "~보다 "
             prefix = f"새로운 결과물은 {row['name']}보다 "
