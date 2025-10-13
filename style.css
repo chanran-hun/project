@@ -1,0 +1,195 @@
+:root {
+    --bg: #0f1115;
+    --panel: #151922;
+    --muted: #8b93a7;
+    --text: #e9ecf1;
+    --accent: #8ab4ff;
+    --bubble-user: #2b3243;
+    --bubble-bot: #1b2130;
+    --chip: #22283a;
+    --chip-brd: #2d3650;
+    --ok: #77dd77;
+    --err: #ff6b6b;
+}
+
+html, body {
+    height: 100%;
+    margin: 0;
+    background: radial-gradient(1200px 800px at 70% -20%, #20305033, transparent), var(--bg);
+    color: var(--text);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Noto Sans KR", "맑은 고딕";
+}
+
+.wrap {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 24px 16px 28vh;
+    box-sizing: border-box;
+}
+
+header {
+    position: sticky;
+    top: 0;
+    padding: 24px 0 10px;
+    background: linear-gradient(180deg, var(--bg), rgba(15,17,21,0.8) 60%, transparent);
+    backdrop-filter: saturate(130%) blur(6px);
+    z-index: 10;
+}
+
+.sub {
+    color: var(--muted);
+    font-size: 14px;
+}
+
+.chips {
+    margin: 18px 0 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.chip {
+    border: 1px solid var(--chip-brd);
+    background: var(--chip);
+    color: #cdd6f4;
+    padding: 8px 11px;
+    border-radius: 999px;
+    font-size: 13px;
+    cursor: pointer;
+    user-select: none;
+    transition: transform .05s ease, background .2s ease, border-color .2s ease;
+}
+
+.chip:hover { 
+    transform: translateY(-1px); border-color: #41507b;
+}
+
+.panel {
+    background: linear-gradient(180deg, #0e1320, #0c111a);
+    border: 1px solid #1e2639;
+    border-radius: 16px;
+    padding: 10px 10px 120px;
+    box-shadow: 0 10px 40px rgba(0,0,0,.35);
+    min-height: 40vh;
+}
+
+.chat {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 10px;
+}
+
+.row { 
+    display: flex; gap: 10px; align-items: flex-end; 
+}
+
+.row.bot { 
+    justify-content: flex-start; 
+}
+
+.row.user { 
+    justify-content: flex-end; 
+}
+
+.avatar {
+    width: 70px; 
+    height: 70px; 
+    border-radius: 50%; 
+    flex: none;
+    background: #20283b; 
+    display: grid; 
+    place-items: center; 
+    color: #9fb6ff; 
+    font-weight: 700; 
+    font-size: 13px;
+    border: 1px solid #2a3554;
+}
+
+.bubble {
+    max-width: min(78ch, 80%);
+    padding: 12px 14px;
+    border-radius: 14px;
+    line-height: 1.45;
+    box-shadow: 0 6px 20px rgba(0,0,0,.22);
+    border: 1px solid #232b42;
+    white-space: pre-wrap;
+}
+
+.bot .bubble { 
+    background: var(--bubble-bot); 
+}
+
+.user .bubble { 
+    background: var(--bubble-user); 
+}
+
+.loading {
+    width: 48px; 
+    display: grid; 
+    grid-template-columns: repeat(3, 1fr); 
+    gap: 6px;
+}
+
+.dot { 
+    width: 8px; 
+    height: 8px; 
+    border-radius: 50%; 
+    background: #b8c7ff; 
+    opacity: .5; 
+    animation: blink 1.2s infinite; 
+}
+
+.dot:nth-child(2){ 
+    animation-delay: .2s; 
+}
+    
+.dot:nth-child(3){ 
+    animation-delay: .4s; 
+}
+
+@keyframes blink { 
+    0%, 80%, 100% { opacity: .2 } 40% { opacity: 1 } 
+}
+
+.composer {
+    position: fixed; 
+    left: 0; 
+    right: 0; 
+    bottom: 0;
+    background: linear-gradient(180deg, transparent, var(--bg) 20%);
+    padding: 12px 10px 16px;
+}
+
+.composer-inner {
+    max-width: 880px; margin: 0 auto; display: grid; grid-template-columns: 1fr auto; gap: 10px;
+    background: var(--panel); border: 1px solid #232b42; border-radius: 14px; padding: 10px; align-items: center;
+}
+
+textarea {
+    width: 100%; resize: none; overflow: hidden; min-height: 22px; max-height: 120px;
+    background: transparent; color: var(--text); border: none; outline: none; font-size: 15px; line-height: 1.4;
+}
+
+button.send {
+    background: #2a3350; border: 1px solid #39456a; color: #cfe1ff; padding: 10px 14px; border-radius: 10px; font-weight: 600; cursor: pointer;
+}
+
+button.send:disabled { 
+    opacity: .5; 
+    cursor: not-allowed; 
+}
+
+.note { 
+    color: var(--muted); 
+    font-size: 12px; 
+    margin-top: 8px; 
+}
+
+.good { 
+    color: var(--ok) 
+}
+
+.bad { 
+    color: var(--err) 
+}
