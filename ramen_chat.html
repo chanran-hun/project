@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>라면 피드백 도우미</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --panel: #151922;
+      --muted: #8b93a7;
+      --text: #e9ecf1;
+      --accent: #8ab4ff;
+      --bubble-user: #2b3243;
+      --bubble-bot: #1b2130;
+      --chip: #22283a;
+      --chip-brd: #2d3650;
+      --ok: #77dd77;
+      --err: #ff6b6b;
+    }
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: radial-gradient(1200px 800px at 70% -20%, #20305033, transparent), var(--bg);
+      color: var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Apple SD Gothic Neo, Noto Sans KR, "맑은 고딕", Arial, "Apple Color Emoji", "Segoe UI Emoji";
+    }
+    .wrap {
+      max-width: 880px;
+      margin: 0 auto;
+      padding: 24px 16px 28vh;
+      box-sizing: border-box;
+    }
+    header {
+      position: sticky;
+      top: 0;
+      padding: 24px 0 10px;
+      background: linear-gradient(180deg, var(--bg), rgba(15,17,21,0.8) 60%, transparent);
+      backdrop-filter: saturate(130%) blur(6px);
+      z-index: 10;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(22px, 3.4vw, 34px);
+      letter-spacing: -0.2px;
+    }
+    .sub {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .chips {
+      margin: 18px 0 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .chip {
+      border: 1px solid var(--chip-brd);
+      background: var(--chip);
+      color: #cdd6f4;
+      padding: 8px 11px;
+      border-radius: 999px;
+      font-size: 13px;
+      cursor: pointer;
+      user-select: none;
+      transition: transform .05s ease, background .2s ease, border-color .2s ease;
+    }
+    .chip:hover { transform: translateY(-1px); border-color: #41507b; }
+
+    .panel {
+      background: linear-gradient(180deg, #0e1320, #0c111a);
+      border: 1px solid #1e2639;
+      border-radius: 16px;
+      padding: 10px 10px 120px;
+      box-shadow: 0 10px 40px rgba(0,0,0,.35);
+      min-height: 40vh;
+    }
+
+    .chat {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      padding: 10px;
+    }
+    .row { display: flex; gap: 10px; align-items: flex-end; }
+    .row.bot { justify-content: flex-start; }
+    .row.user { justify-content: flex-end; }
+
+    .avatar {
+      width: 32px; height: 32px; border-radius: 50%; flex: none;
+      background: #20283b; display: grid; place-items: center; color: #9fb6ff; font-weight: 700; font-size: 13px;
+      border: 1px solid #2a3554;
+    }
+
+    .bubble {
+      max-width: min(78ch, 80%);
+      padding: 12px 14px;
+      border-radius: 14px;
+      line-height: 1.45;
+      box-shadow: 0 6px 20px rgba(0,0,0,.22);
+      border: 1px solid #232b42;
+      white-space: pre-wrap;
+    }
+    .bot .bubble { background: var(--bubble-bot); }
+    .user .bubble { background: var(--bubble-user); }
+
+    .loading {
+      width: 48px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
+    }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #b8c7ff; opacity: .5; animation: blink 1.2s infinite; }
+    .dot:nth-child(2){ animation-delay: .2s; }
+    .dot:nth-child(3){ animation-delay: .4s; }
+    @keyframes blink { 0%, 80%, 100% { opacity: .2 } 40% { opacity: 1 } }
+
+    .composer {
+      position: fixed; left: 0; right: 0; bottom: 0;
+      background: linear-gradient(180deg, transparent, var(--bg) 20%);
+      padding: 12px 10px 16px;
+    }
+    .composer-inner {
+      max-width: 880px; margin: 0 auto; display: grid; grid-template-columns: 1fr auto; gap: 10px;
+      background: var(--panel); border: 1px solid #232b42; border-radius: 14px; padding: 10px; align-items: center;
+    }
+    textarea {
+      width: 100%; resize: none; overflow: hidden; min-height: 22px; max-height: 120px;
+      background: transparent; color: var(--text); border: none; outline: none; font-size: 15px; line-height: 1.4;
+    }
+    button.send {
+      background: #2a3350; border: 1px solid #39456a; color: #cfe1ff; padding: 10px 14px; border-radius: 10px; font-weight: 600; cursor: pointer;
+    }
+    button.send:disabled { opacity: .5; cursor: not-allowed; }
+
+    .note { color: var(--muted); font-size: 12px; margin-top: 8px; }
+    .good { color: var(--ok) }
+    .bad { color: var(--err) }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>라면에 무슨 문제가 있나요?</h1>
+      <div class="sub">예: 싱겁다 · 짜다 · 너무 맵다 · 느끼하다 · 밍밍하다 …</div>
+      <div class="chips" id="chips">
+        <span class="chip" data-text="너무 싱겁다">너무 싱겁다</span>
+        <span class="chip" data-text="너무 짜다">너무 짜다</span>
+        <span class="chip" data-text="너무 맵다">너무 맵다</span>
+        <span class="chip" data-text="느끼하다">느끼하다</span>
+        <span class="chip" data-text="밍밍하다">밍밍하다</span>
+        <span class="chip" data-text="쓴 맛이 난다">쓴 맛이 난다</span>
+        <span class="chip" data-text="너무 달다">너무 달다</span>
+        <span class="chip" data-text="시다">시다</span>
+      </div>
+    </header>
+
+    <section class="panel">
+      <div class="chat" id="chat">
+        <div class="row bot">
+          <div class="avatar">라면</div>
+          <div class="bubble">안녕하세요! 한 가지만 알려주세요.\n무슨 문제가 있나요? (예: 너무 싱겁다)</div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="composer">
+    <div class="composer-inner">
+      <textarea id="input" rows="1" placeholder="문제를 입력하세요… (예: 너무 싱겁다)" autofocus></textarea>
+      <button class="send" id="send" disabled>보내기</button>
+    </div>
+    <div class="wrap note">Tip: 한 번에 한 가지 문제만 적어주세요. (정교화는 추후 지원 예정)</div>
+  </div>
+
+  <script>
+    // ===== 기본 설정 =====
+    const API_ENDPOINT = "http://127.0.0.1:8080/feedback"; // feedback_ramen_api.py 엔드포인트
+
+    const chat = document.getElementById('chat');
+    const input = document.getElementById('input');
+    const sendBtn = document.getElementById('send');
+
+    // textarea 자동 높이 조절
+    const autoGrow = () => { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 120) + 'px'; };
+    input.addEventListener('input', () => { sendBtn.disabled = !input.value.trim(); autoGrow(); });
+
+    // 샘플 칩 클릭
+    document.getElementById('chips').addEventListener('click', (e) => {
+      const chip = e.target.closest('.chip');
+      if (!chip) return;
+      input.value = chip.dataset.text;
+      sendBtn.disabled = !input.value.trim();
+      autoGrow();
+      input.focus();
+    });
+
+    // 메시지 렌더링
+    function addMsg(type, text) {
+      const row = document.createElement('div');
+      row.className = 'row ' + type;
+      const avatar = document.createElement('div');
+      avatar.className = 'avatar';
+      avatar.textContent = type === 'user' ? '나' : '라면';
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      bubble.textContent = text;
+      row.appendChild(avatar);
+      row.appendChild(bubble);
+      chat.appendChild(row);
+      chat.parentElement.scrollTop = chat.parentElement.scrollHeight;
+    }
+
+    function addLoading() {
+      const row = document.createElement('div');
+      row.className = 'row bot';
+      row.id = 'loadingRow';
+      const avatar = document.createElement('div'); avatar.className = 'avatar'; avatar.textContent = '라면';
+      const bubble = document.createElement('div'); bubble.className = 'bubble';
+      const box = document.createElement('div'); box.className = 'loading';
+      box.innerHTML = '<div class="dot"></div><div class="dot"></div><div class="dot"></div>';
+      bubble.appendChild(box); row.appendChild(avatar); row.appendChild(bubble);
+      chat.appendChild(row);
+      chat.parentElement.scrollTop = chat.parentElement.scrollHeight;
+    }
+
+    function removeLoading(){
+      const r = document.getElementById('loadingRow');
+      if (r) r.remove();
+    }
+
+    // 응답 포맷팅
+    function formatResponse(json){
+      const lines = [];
+      if (json.detected_issue) lines.push(`문제 진단: ${json.detected_issue}`);
+      if (json.guidance) lines.push(json.guidance);
+      if (Array.isArray(json.first_actions) && json.first_actions.length){
+        lines.push('\n추천 재료/권장량:');
+        json.first_actions.forEach(a=>{
+          const name = a.ingredient || a;
+          const amt = a.amount ? ` — ${a.amount}` : '';
+          lines.push(`• ${name}${amt}`);
+        });
+      }
+      if (Array.isArray(json.notes) && json.notes.length){
+        lines.push('\n메모:');
+        json.notes.forEach(n=>lines.push(`- ${n}`));
+      }
+      return lines.join('\n');
+    }
+
+    // 전송 핸들러
+    async function handleSend(){
+      const text = input.value.trim();
+      if (!text) return;
+      addMsg('user', text);
+      input.value = ''; input.dispatchEvent(new Event('input'));
+      addLoading();
+      try {
+        const res = await fetch(API_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ problem: text })
+        });
+        const ok = res.ok;
+        const data = await res.json().catch(()=>({}));
+        removeLoading();
+        if (!ok){
+          const msg = (data && data.detail) ? data.detail : '서버 오류가 발생했습니다.';
+          addMsg('bot', `❌ ${msg}`);
+          return;
+        }
+        addMsg('bot', formatResponse(data));
+      } catch (err){
+        removeLoading();
+        addMsg('bot', '❌ 서버에 연결하지 못했습니다. 서버가 켜져 있는지 확인해주세요.');
+      }
+    }
+
+    // 이벤트 바인딩
+    sendBtn.addEventListener('click', handleSend);
+    input.addEventListener('keydown', (e)=>{
+      if (e.key === 'Enter' && !e.shiftKey){
+        e.preventDefault();
+        handleSend();
+      }
+    });
+  </script>
+</body>
+</html>
