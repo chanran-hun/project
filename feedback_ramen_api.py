@@ -142,4 +142,4 @@ def chat(input: ChatIn):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("feedback_ramen_chat_api:app", host="127.0.0.1", port=8080, reload=True)
+    uvicorn.run("feedback_ramen_api:app", host="127.0.0.1", port=8080, reload=True)
